@@ -1,14 +1,30 @@
 """In-memory pipeline state — single source of truth shared across all routes."""
 from __future__ import annotations
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+# Probe sentence-transformers availability up front and log a single, clearly
+# labelled line on import so Render / Docker logs make the cause obvious when
+# hybrid search is unavailable.
 try:
     import sentence_transformers as _st  # noqa: F401
     SEMANTIC_AVAILABLE: bool = True
-except ImportError:
+    print(
+        f"[STATE] SEMANTIC_AVAILABLE=True | sentence-transformers="
+        f"{getattr(_st, '__version__', '?')}",
+        file=sys.stderr,
+        flush=True,
+    )
+except Exception as _semantic_exc:  # pragma: no cover - logged for ops visibility
     SEMANTIC_AVAILABLE: bool = False
+    print(
+        f"[STATE] SEMANTIC_AVAILABLE=False | reason={type(_semantic_exc).__name__}: "
+        f"{_semantic_exc}",
+        file=sys.stderr,
+        flush=True,
+    )
 import copy
 
 from src.chunking import Chunk
@@ -219,6 +235,91 @@ class PipelineState:
             }
             for preset_id, snapshot in self.preset_cache.items()
         }
+
+    def ensure_default_search_corpus(self) -> tuple[int, int]:
+        """Populate ``preset_cache`` with chunked snapshots for every
+        ``coursework_given`` preset so the search route has a non-empty corpus
+        without the user having to click Load on the Documents tab.
+
+        Idempotent: presets that already have a loaded snapshot in
+        ``preset_cache`` are skipped. Does NOT mutate the currently active
+        preset (preset_id / policy_chunks / response_chunks) so existing
+        per-pair workflows keep working unchanged.
+
+        Returns ``(pairs_loaded, total_chunks)`` over the freshly added
+        presets only. Raises if the underlying PDFs are missing — callers
+        should surface this as a clear 500 to the frontend.
+        """
+        # Import inside the method so the module's import-time path stays cheap
+        # and these helpers can run in a worker thread.
+        from backend.core.presets import PRESETS, validate_preset_files
+        from src.pdf_loader import extract_pages
+        from src.chunking import chunk_pages_v2
+        from src.response_units import extract_response_units
+
+        coursework_ids = [
+            pid for pid, p in PRESETS.items()
+            if p.dataset_group == "coursework_given"
+        ]
+
+        pairs_loaded = 0
+        chunks_loaded = 0
+
+        for pid in coursework_ids:
+            if pid in self.preset_cache:
+                # Already loaded (either by this helper or by a previous user
+                # click). Skip without touching anything.
+                continue
+
+            preset = PRESETS[pid]
+            validate_preset_files(preset)
+
+            policy_pages = list(extract_pages(preset.policy_pdf))
+            response_pages = list(extract_pages(preset.response_pdf))
+            policy_chunks = chunk_pages_v2(policy_pages)
+            response_chunks = chunk_pages_v2(response_pages)
+
+            # Response-unit extraction is cheap and keeps the snapshot
+            # consistent with what `_load_sync` produces, so the Documents
+            # tab "loaded" state is identical whether the auto-loader or a
+            # manual click populated it.
+            try:
+                response_units = extract_response_units(response_pages)
+            except Exception:
+                response_units = []
+
+            load_ocr = any(p.get("ocr") for p in policy_pages) or any(
+                p.get("ocr") for p in response_pages
+            )
+
+            stages = {
+                "load":     StageState(status="done"),
+                "extract":  StageState(),
+                "align":    StageState(),
+                "classify": StageState(),
+            }
+
+            self.preset_cache[pid] = PipelineSnapshot(
+                stages=stages,
+                policy_path=preset.policy_pdf,
+                response_path=preset.response_pdf,
+                load_ocr=load_ocr,
+                policy_pages=policy_pages,
+                response_pages=response_pages,
+                policy_chunks=policy_chunks,
+                response_chunks=response_chunks,
+                response_units=response_units,
+                recommendations=[],
+                alignments=[],
+                labels=[],
+                evaluation=None,
+                evaluation_status=None,
+            )
+
+            pairs_loaded += 1
+            chunks_loaded += len(policy_chunks) + len(response_chunks)
+
+        return pairs_loaded, chunks_loaded
 
     def stage_unlocked(self, stage: str) -> bool:
         """Return True if the stage's prerequisite is satisfied."""

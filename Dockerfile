@@ -22,8 +22,23 @@ RUN apt-get update \
 WORKDIR /app
 
 # Install Python deps first so Docker layer caching works between code edits.
+# Install the CPU-only torch wheel before the rest of requirements so
+# sentence-transformers picks it up instead of the default CUDA-bundled torch
+# from PyPI (which would push the image well past Render's free-tier budget).
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install -r /app/backend/requirements.txt
+RUN pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch>=2.0,<3" \
+    && pip install -r /app/backend/requirements.txt
+
+# Pre-download the sentence-transformer model at build time so the first
+# hybrid/semantic request on a cold Render dyno does not have to fetch
+# ~90 MB over the network before responding. Bakes the model files into
+# the image layer at the HuggingFace default cache path.
+ENV SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers \
+    HF_HOME=/app/.cache/huggingface \
+    SEMANTIC_MODEL_NAME=all-MiniLM-L6-v2
+RUN python -c "from sentence_transformers import SentenceTransformer; \
+    SentenceTransformer('all-MiniLM-L6-v2'); \
+    print('[build] sentence-transformers model cached: all-MiniLM-L6-v2')"
 
 # Copy the rest of the repo (src/, backend/, data/, outputs/, scripts/, etc.).
 # .dockerignore keeps notebooks, node_modules, dist, caches, and logs out.
