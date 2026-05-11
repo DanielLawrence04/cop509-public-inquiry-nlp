@@ -21,16 +21,26 @@ const EXPECTED_RECS = {
 
 const DocumentsScreen = () => {
   const {
-    presets, status, task2Data,
+    presets, status, task2Data, task2DataMap,
     batchEvaluate, isBatchRunning,
     runPairPipeline, pairLoadingState,
+    finalResultsLoaded,
   } = useContext(window.AppContext);
 
   const presetStatuses  = status.preset_statuses  || {};
   const presetSummaries = status.preset_summaries || {};
   const isOcr           = status.load_ocr === true;
 
-  // Derive per-pair state purely from runPairPipeline tracking + cached backend status.
+  // Pair is "statically loaded" when it appears in task2DataMap with rows —
+  // this covers both the validated-final-export preload and any completed
+  // live pipeline run. We treat it the same as backend-reported 'complete'
+  // so all Documents-tab affordances (card border, badge, loaded-pairs list)
+  // reflect the actual data present in the app.
+  const hasTask2 = (id) => Boolean(task2DataMap?.[id]?.recommendations?.length);
+
+  // Derive per-pair state from in-flight loading > backend status > static
+  // task2DataMap presence. Order matters: an active load should still show
+  // the spinner even if the static export already populated rows.
   const pairState = (id) => {
     const local = pairLoadingState?.[id];
     if (local === 'loading') return 'loading';
@@ -38,6 +48,7 @@ const DocumentsScreen = () => {
     const pst = presetStatuses[id];
     if (pst === 'error')    return 'error';
     if (pst === 'complete') return 'loaded';
+    if (hasTask2(id))       return 'loaded';
     if (pst === 'loaded')   return 'needs-eval';
     return 'ready';
   };
@@ -142,12 +153,16 @@ const DocumentsScreen = () => {
               <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(244px,1fr))", gap:10}}>
                 {g.items.map(p => {
                   const st = pairState(p.id);
+                  const recCount = task2DataMap?.[p.id]?.recommendations?.length
+                    ?? presetSummaries[p.id]?.recommendations
+                    ?? null;
                   return (
                     <PresetCard
                       key={p.id}
                       preset={p}
                       state={st}
                       isOcr={st === 'loading' && isOcr}
+                      recCount={recCount}
                       onClick={() => handleCardClick(p.id)}
                     />
                   );
@@ -168,6 +183,7 @@ const DocumentsScreen = () => {
             presets={tablePairs}
             pairState={pairState}
             presetSummaries={presetSummaries}
+            task2DataMap={task2DataMap}
           />
         ) : (
           <EmptyState icon="docs" title="No pairs loaded yet"
@@ -192,7 +208,7 @@ const STATE_META = {
   error:        { label: "Error · click to retry", cls: "bad", icon: "warning" },
 };
 
-const PresetCard = ({ preset, state, isOcr, onClick }) => {
+const PresetCard = ({ preset, state, isOcr, recCount, onClick }) => {
   const meta       = STATE_META[state] || STATE_META.ready;
   const loading    = state === 'loading';
   const isLoaded   = state === 'loaded';
@@ -203,6 +219,8 @@ const PresetCard = ({ preset, state, isOcr, onClick }) => {
   return (
     <button
       onClick={isInert ? undefined : onClick}
+      disabled={isInert}
+      aria-disabled={isInert}
       className="preset-card"
       style={{
         display: "flex", flexDirection: "column", gap: 10,
@@ -301,6 +319,14 @@ const PresetCard = ({ preset, state, isOcr, onClick }) => {
       }}>
         <Icon name={meta.icon} size={11}/>
         <span>{meta.label}</span>
+        {isLoaded && recCount != null && (
+          <>
+            <span style={{color:"var(--line)"}}>·</span>
+            <span className="mono tabnum" style={{color:"var(--muted)", fontWeight:500}}>
+              {recCount} rec{recCount === 1 ? "" : "s"}
+            </span>
+          </>
+        )}
       </div>
     </button>
   );
@@ -329,16 +355,19 @@ const DocPairThumb = () => (
 );
 
 /* ── Loaded pairs list ───────────────────────────────────── */
-const LoadedPairsList = ({ presets, pairState, presetSummaries }) => (
+const LoadedPairsList = ({ presets, pairState, presetSummaries, task2DataMap }) => (
   <div>
     {presets.map((p, i) => {
       const summary    = presetSummaries[p.id] || {};
       const st         = pairState(p.id);
       const hasChunks  = summary.policy_chunks != null || summary.response_chunks != null;
       const totalChunks = hasChunks ? (summary.policy_chunks ?? 0) + (summary.response_chunks ?? 0) : null;
-      // Only show recs when classify completed so the value reflects a real,
-      // usable extraction. Otherwise '—'.
-      const recs = (st === 'loaded') ? (summary.recommendations ?? null) : null;
+      // Prefer backend summary count; fall back to the actual row count in
+      // task2DataMap so validated-final-export-only loads also show real recs.
+      const task2Count = task2DataMap?.[p.id]?.recommendations?.length ?? null;
+      const recs = (st === 'loaded')
+        ? (summary.recommendations ?? task2Count)
+        : null;
       return (
         <LoadedPairRow
           key={p.id}
