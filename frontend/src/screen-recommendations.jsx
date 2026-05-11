@@ -478,7 +478,7 @@ const DrillPanel = ({ rec }) => {
         </div>
         <div className="mini-pdf" style={{margin:"6px 14px 14px"}}>
           <div className="pg-header">
-            <span>{rec.document || '—'}</span>
+            <span>{rec.document ? `Recommendation · ${rec.document}` : '—'}</span>
             <span>p. {rec.page_number ?? '—'}</span>
           </div>
           <p style={{wordBreak:"break-word", overflowWrap:"anywhere"}}>{rec.text || '—'}</p>
@@ -494,7 +494,13 @@ const DrillPanel = ({ rec }) => {
         {hasMatch ? (
           <div className="mini-pdf" style={{margin:"6px 14px 14px"}}>
             <div className="pg-header">
-              <span>{m.source || '—'}</span>
+              <span>
+                {m.source
+                  ? `Response · ${m.source}`
+                  : rec.document
+                    ? `Response · ${rec.document}`
+                    : '—'}
+              </span>
               <span>p. {m.page_number ?? '—'}</span>
             </div>
             <p style={{wordBreak:"break-word", overflowWrap:"anywhere"}}>{m.matched_text}</p>
