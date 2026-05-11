@@ -3,7 +3,13 @@
 const { useState, useEffect, useRef, useCallback, createContext, useContext, useMemo } = React;
 const Icon = window.Icon;
 
-const API_BASE = 'http://localhost:8000';
+// API base is injected at build time via index.html (Vite %VITE_API_BASE%
+// substitution) or can be overridden at runtime by setting window.__API_BASE__.
+// Falls back to local dev backend when neither is configured.
+const __injected = (typeof window !== 'undefined' && window.__API_BASE__) || '';
+const API_BASE = (__injected && !__injected.includes('%VITE_API_BASE%'))
+  ? __injected.replace(/\/+$/, '')
+  : 'http://localhost:8000';
 
 // ── API fetch helper ──────────────────────────────────────────
 window.apiFetch = async function(path, options = {}) {

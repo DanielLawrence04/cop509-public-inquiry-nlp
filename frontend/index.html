@@ -11,6 +11,12 @@
 </head>
 <body>
 <div id="root"></div>
+<script>
+  // Backend API base — substituted at build time by Vite from VITE_API_BASE.
+  // If unset, %VITE_API_BASE% is left as a literal and the app falls back to
+  // http://localhost:8000 (see frontend/src/app.jsx).
+  window.__API_BASE__ = "%VITE_API_BASE%";
+</script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>

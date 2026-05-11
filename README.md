@@ -97,18 +97,59 @@ Required notebook inputs:
 
 The optional web app lives in `frontend/` and `backend/`. It is supporting evidence only and is not required to mark the notebooks.
 
-Current deployment note: the frontend currently points to a local FastAPI backend at `http://localhost:8000`. A Vercel-hosted frontend will therefore need either a separately hosted backend API or a later deployment configuration pass. This repository pass does not modify frontend/backend deployment code.
+The notebooks and PDF exports remain the official coursework submission. The web app is an optional extension and is not required for marking.
 
-Local app commands:
+### Run the web app locally
 
 ```powershell
-# backend
+# backend (from repo root)
 python -m uvicorn backend.main:app --reload --port 8000
 
-# frontend
+# frontend (in a second shell)
 cd frontend
+npm install
 npm run dev
 ```
+
+The frontend reads `VITE_API_BASE` at build time and falls back to
+`http://localhost:8000` when unset, so no extra configuration is needed for
+local development. See `frontend/.env.example` for the variable name.
+
+### Full production deployment
+
+The frontend is a static Vite build, and the backend is a FastAPI service.
+For the app to work end-to-end on Vercel, the backend must be hosted
+separately and the frontend must be built with `VITE_API_BASE` pointing at it.
+
+**1. Deploy the backend (Render example, see `render.yaml`):**
+
+- Root directory: `.`
+- Build command: `pip install -r backend/requirements.txt`
+- Start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+- Health check path: `/health`
+- Environment variables:
+  - `CORS_ORIGINS` = the Vercel frontend URL (e.g. `https://your-app.vercel.app`).
+    Comma-separated values are supported; local dev origins are always allowed.
+
+Railway and Azure App Service work the same way — same build/start commands,
+same `CORS_ORIGINS` variable. Note the start command for the chosen host and
+the resulting public backend URL.
+
+**2. Deploy the frontend to Vercel:**
+
+- Root directory: `frontend`
+- Framework preset: Vite
+- Build command: `npm run build`
+- Output directory: `dist`
+- Environment variable:
+  - `VITE_API_BASE` = the deployed backend URL, no trailing slash
+    (e.g. `https://cop509-backend.onrender.com`).
+
+**3. Wire the two together:**
+
+After the first deploy, set `CORS_ORIGINS` on the backend to the exact Vercel
+URL, then redeploy the backend. The browser `OPTIONS` preflight from Vercel to
+the backend will then succeed and the app is fully live.
 
 GitHub link: add after push.
 
