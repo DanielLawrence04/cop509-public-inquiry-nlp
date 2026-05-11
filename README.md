@@ -121,19 +121,31 @@ The frontend is a static Vite build, and the backend is a FastAPI service.
 For the app to work end-to-end on Vercel, the backend must be hosted
 separately and the frontend must be built with `VITE_API_BASE` pointing at it.
 
-**1. Deploy the backend (Render example, see `render.yaml`):**
+**1. Deploy the backend on Render using Docker (see `Dockerfile` and `render.yaml`):**
 
-- Root directory: `.`
-- Build command: `pip install -r backend/requirements.txt`
-- Start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+The backend is deployed as a Docker service rather than a plain Python service
+because Tesseract OCR must be installed at the system level (Render's Python
+runtime mounts `/var/lib/apt` read-only and apt-get fails). The repo-root
+`Dockerfile` installs `tesseract-ocr` and `tesseract-ocr-eng`, then runs
+`uvicorn` against `backend.main:app`.
+
+Render service settings:
+
+- Environment: **Docker**
+- Dockerfile path: `./Dockerfile`
+- Docker context: `.`
 - Health check path: `/health`
 - Environment variables:
-  - `CORS_ORIGINS` = the Vercel frontend URL (e.g. `https://your-app.vercel.app`).
+  - `CORS_ORIGINS` = the Vercel frontend URL (e.g. `https://cop509-public-inquiry-nlp.vercel.app`).
     Comma-separated values are supported; local dev origins are always allowed.
 
-Railway and Azure App Service work the same way — same build/start commands,
-same `CORS_ORIGINS` variable. Note the start command for the chosen host and
-the resulting public backend URL.
+The container's start command is:
+
+```
+python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+Railway/Azure App Service can use the same Dockerfile.
 
 **2. Deploy the frontend to Vercel:**
 
@@ -143,7 +155,7 @@ the resulting public backend URL.
 - Output directory: `dist`
 - Environment variable:
   - `VITE_API_BASE` = the deployed backend URL, no trailing slash
-    (e.g. `https://cop509-backend.onrender.com`).
+    (current live value: `https://cop509-public-inquiry-nlp.onrender.com`).
 
 **3. Wire the two together:**
 
@@ -151,9 +163,14 @@ After the first deploy, set `CORS_ORIGINS` on the backend to the exact Vercel
 URL, then redeploy the backend. The browser `OPTIONS` preflight from Vercel to
 the backend will then succeed and the app is fully live.
 
-GitHub link: add after push.
+## Optional Supporting Links
 
-Vercel link: add after optional deployment.
+The notebooks and PDF exports are the official coursework submission files. The GitHub repository and deployed web app below are included as supporting evidence for the extended implementation.
+
+- GitHub repository: https://github.com/DanielLawrence04/cop509-public-inquiry-nlp/tree/main
+- Web app demo: https://cop509-public-inquiry-nlp.vercel.app/
+
+The deployed web app uses a free Render backend, so the first request after a period of inactivity may take a short time (typically 30–60 seconds) while the backend wakes up. Subsequent requests are fast.
 
 ## Repository Hygiene
 

@@ -1,16 +1,16 @@
 # Render blueprint for the optional FastAPI backend.
-# Deploy with: https://render.com/docs/blueprint-spec
+# Uses the repo-root Dockerfile so Tesseract OCR is available at runtime —
+# Render's plain Python runtime mounts /var/lib/apt read-only, which prevents
+# apt-get install of tesseract-ocr.
+# Blueprint spec: https://render.com/docs/blueprint-spec
 services:
   - type: web
     name: cop509-backend
-    runtime: python
+    runtime: docker
     plan: free
-    rootDir: .
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: CORS_ORIGINS
-        sync: false  # set to the Vercel frontend URL, e.g. https://your-app.vercel.app
+        sync: false  # set to the Vercel frontend URL, e.g. https://cop509-public-inquiry-nlp.vercel.app

@@ -1,0 +1,43 @@
+# Keep the backend image small and reproducible.
+.git
+.gitignore
+.github
+.claude
+.venv
+venv
+env
+ENV
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.ipynb_checkpoints
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Frontend build artefacts — not needed by the backend image.
+frontend/node_modules
+frontend/dist
+
+# Logs and local archives.
+*.log
+backend-*.out.log
+backend-*.err.log
+*.zip
+NLP.zip
+
+# Submission folder is built locally for upload, not deployment.
+COP509_Submission
+COP509_Submission.zip
+
+# Notebooks and PDFs aren't executed by the API.
+notebooks
+*.pdf
+!data/raw/*.pdf
+
+# OS/editor noise.
+.DS_Store
+Thumbs.db
+.vscode
+.idea
