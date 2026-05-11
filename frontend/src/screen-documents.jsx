@@ -67,7 +67,14 @@ const DocumentsScreen = () => {
 
   const anyPairLoading = Object.values(pairLoadingState || {}).some(v => v === 'loading');
   const batchBusy      = isBatchRunning || anyPairLoading;
-  const canBatch       = presets.length > 0 && !batchBusy;
+  // When the validated static export already covers every visible preset
+  // (the hosted demo's default state), Batch evaluate all would only kick
+  // off unnecessary live recomputation. Disable it in that case so the
+  // marker can't accidentally trigger backend work the demo doesn't need.
+  const allStaticLoaded = finalResultsLoaded
+    && presets.length > 0
+    && presets.every(p => hasTask2(p.id));
+  const canBatch       = presets.length > 0 && !batchBusy && !allStaticLoaded;
 
   // Clicking a card runs the full pipeline for that pair (no-op if already loaded).
   const handleCardClick = (presetId) => {
@@ -114,12 +121,18 @@ const DocumentsScreen = () => {
           <button
             className="btn primary"
             disabled={!canBatch}
-            title={batchBusy ? 'Pipeline is busy…' : 'Run the full pipeline for all preset pairs'}
-            onClick={batchEvaluate}
+            title={
+              allStaticLoaded ? 'All pairs already loaded from the validated final export'
+              : batchBusy ? 'Pipeline is busy…'
+              : 'Run the full pipeline for all preset pairs'
+            }
+            onClick={canBatch ? batchEvaluate : undefined}
           >
             {isBatchRunning
               ? <><span className="spinner" style={{width:11,height:11,border:'1.5px solid rgba(255,255,255,0.35)',borderTopColor:'#fff'}}/> Evaluating…</>
-              : <><Icon name="sparkle" size={12}/> Batch evaluate all</>
+              : allStaticLoaded
+                ? <><Icon name="check" size={12}/> All pairs loaded</>
+                : <><Icon name="sparkle" size={12}/> Batch evaluate all</>
             }
           </button>
         </div>

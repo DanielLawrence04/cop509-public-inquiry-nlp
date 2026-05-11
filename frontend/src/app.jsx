@@ -553,12 +553,23 @@ const App = () => {
   const activePreset = presets.find(p => p.id === activePresetId);
   const isRunning = status.stages && Object.values(status.stages).some(s => s.status === 'running');
 
-  // Derive header pill label from loaded set, not the last-activated preset
+  // The header pill should reflect *user-initiated* live backend actions
+  // (batch evaluate, per-pair load) rather than any stage status the backend
+  // happens to report on first connect. Static preload of validated results
+  // must never make this pill say "Running…".
+  const localActivity = isBatchRunning
+    || Object.values(pairLoadingState || {}).some(v => v === 'loading');
+
   const loadedCount = loadedPresetIds.size;
-  const statusPillLabel = isRunning ? '⟳ Running…'
-    : loadedCount === 0 ? '—'
-    : loadedCount === 1 ? (presets.find(p => loadedPresetIds.has(p.id))?.label || '—')
-    : `${loadedCount} pairs loaded`;
+  const statusPillLabel = localActivity
+    ? '⟳ Running…'
+    : loadedCount === 0
+      ? (finalResultsLoaded ? 'Final results loaded' : '—')
+      : finalResultsLoaded && loadedCount === Object.keys(task2DataMap).length
+        ? `Final results loaded · ${loadedCount} pairs`
+        : loadedCount === 1
+          ? (presets.find(p => loadedPresetIds.has(p.id))?.label || '—')
+          : `${loadedCount} pairs loaded`;
   const recStage = deriveRecStage(status);
 
   const ctx = {
@@ -598,27 +609,6 @@ const App = () => {
                 color:'var(--err-fg)', fontSize:13, marginBottom:14,
               }}>
                 {initError}
-              </div>
-            )}
-            {finalResultsLoaded && (route === 'recommendations' || route === 'evaluation') && (
-              <div style={{
-                padding:'10px 14px', background:'var(--info-bg, #eef4ff)',
-                border:'1px solid var(--info-bd, #c7d7ff)', borderRadius:'var(--r-md)',
-                color:'var(--info-fg, #1f3a8a)', fontSize:12.5, marginBottom:14,
-                display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
-              }}>
-                <span>
-                  Showing validated final coursework output. Live recomputation is
-                  available through the backend but may be slower on the hosted demo.
-                </span>
-                <button
-                  className="btn"
-                  style={{fontSize:12, padding:'4px 10px'}}
-                  onClick={() => loadFinalResults().catch(() => {})}
-                  title="Re-fetch the validated 246-row export"
-                >
-                  Reload validated final results
-                </button>
               </div>
             )}
             <Screen/>

@@ -148,7 +148,9 @@ const RecommendationAnalysisScreen = () => {
               <option value="all">All loaded pairs</option>
               {groups.map(g => (
                 <optgroup key={g.id} label={g.label}>
-                  {g.items.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  {g.items.map(p => (
+                    <option key={p.id} value={p.id}>{p.label} ({p.id})</option>
+                  ))}
                 </optgroup>
               ))}
             </select>

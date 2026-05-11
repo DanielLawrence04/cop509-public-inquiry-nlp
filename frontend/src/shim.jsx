@@ -51,18 +51,23 @@ window.adaptFinalExport = function(payload) {
     };
   };
 
-  const toTask2Rec = (row, idx) => {
+  const toTask2Rec = (row, idx, presetId) => {
     const debug = row.debug || {};
     const bestMatch = toTask2Match(row);
     const cls = row.classification || 'not_addressed';
     const align = Number(debug.alignment_confidence ?? row.confidence ?? 0) || 0;
     const lex = Number(debug.lexical_similarity ?? align) || 0;
     const clsConf = debug.classification_confidence;
+    // Display source: friendly label paired with stable pair id so the
+    // marker can see both in the Document column / detail panel without
+    // losing the canonical id from outputs/final_recommendations_246.json.
+    const friendly = (PRESET_LABELS[presetId] && PRESET_LABELS[presetId].label) || presetId;
+    const documentLabel = presetId ? `${friendly} (${presetId})` : friendly;
     return {
       rec_id: idx,
       item_label: String(row.id ?? idx),
       text: String(row.recommendation_text || ''),
-      document: '',
+      document: documentLabel,
       page_number: row.recommendation_page ?? null,
       detector: 'validated_final_export',
       extraction_method: 'validated_final_export',
@@ -99,7 +104,7 @@ window.adaptFinalExport = function(payload) {
   const pairCounts = {};
   const syntheticPresets = [];
   for (const [presetId, presetRows] of Object.entries(rowsByPair)) {
-    const recs = presetRows.map(toTask2Rec);
+    const recs = presetRows.map((row, idx) => toTask2Rec(row, idx, presetId));
     const meanAlign = recs.length ? recs.reduce((s, r) => s + r.alignment_confidence, 0) / recs.length : 0;
     const meanExtract = recs.length ? recs.reduce((s, r) => s + r.confidence, 0) / recs.length : 0;
     byPreset[presetId] = {
