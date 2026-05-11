@@ -65,6 +65,91 @@ if pipeline.embeddings_cache:
     pipeline.embeddings_cache.clear()
 
 
+# Coalesces concurrent first-search requests so we never run the PDF→chunks
+# pipeline more than once for the same cold backend.
+_DEFAULT_CORPUS_LOCK = asyncio.Lock()
+
+
+async def _ensure_default_search_corpus_loaded() -> None:
+    """Load the 5 coursework pairs into ``preset_cache`` if the search corpus
+    is empty so the hosted demo doesn't require the user to click Load on the
+    Documents tab. Idempotent and safe to call on every request.
+
+    Raises ``HTTPException(500)`` with a clear, user-facing reason if the
+    underlying PDFs are missing or the loader crashes.
+    """
+    # Fast path: at least one preset has chunked snapshot, OR the active pair
+    # already has chunks loaded the legacy way. Nothing to do.
+    if pipeline.preset_cache:
+        return
+    if pipeline.policy_chunks or pipeline.response_chunks:
+        return
+
+    async with _DEFAULT_CORPUS_LOCK:
+        # Re-check under the lock — another concurrent first-search may have
+        # populated the cache while we were waiting.
+        if pipeline.preset_cache:
+            return
+        if pipeline.policy_chunks or pipeline.response_chunks:
+            return
+
+        print(
+            "[SEARCH] corpus empty; loading default search corpus...",
+            file=sys.stderr,
+            flush=True,
+        )
+        log.emit("search.autoload", "corpus empty; loading default search corpus", "info")
+
+        t0 = time.monotonic()
+        try:
+            pairs_loaded, chunks_loaded = await asyncio.to_thread(
+                pipeline.ensure_default_search_corpus
+            )
+        except FileNotFoundError as exc:
+            print(
+                f"[SEARCH] default corpus load FAILED: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            log.emit("search.autoload", f"PDF missing: {exc}", "err")
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Search corpus could not be prepared — required PDF is "
+                    f"missing from the backend deployment: {exc}"
+                ),
+            )
+        except Exception as exc:
+            print(
+                f"[SEARCH] default corpus load FAILED: "
+                f"{type(exc).__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            log.emit("search.autoload", f"load failed: {exc}", "err")
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Search corpus could not be prepared "
+                    f"({type(exc).__name__}: {exc})."
+                ),
+            )
+
+        ms = int((time.monotonic() - t0) * 1000)
+        print(
+            f"[SEARCH] default search corpus loaded: {pairs_loaded} pairs, "
+            f"{chunks_loaded} chunks ({ms} ms)",
+            file=sys.stderr,
+            flush=True,
+        )
+        log.emit(
+            "search.autoload",
+            f"loaded {pairs_loaded} pairs, {chunks_loaded} chunks",
+            "ok",
+            ms=ms,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -112,6 +197,13 @@ async def search(body: SearchRequest):
                 "Switch to TF-IDF for keyword-only search."
             ),
         )
+
+    # Cold-backend auto-load: the hosted Documents tab is read-only (preloaded
+    # from the static final-results JSON), so users can't click Load to
+    # populate policy_chunks. Build the default 5-pair coursework corpus on
+    # first search instead. Idempotent; the lock inside coalesces concurrent
+    # first-hits.
+    await _ensure_default_search_corpus_loaded()
 
     # ---- Build chunk pool ------------------------------------------------
     pair_id_map: dict[tuple[int, str], str] = {}
