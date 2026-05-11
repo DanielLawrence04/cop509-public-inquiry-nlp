@@ -237,9 +237,14 @@ class PipelineState:
         }
 
     def ensure_default_search_corpus(self) -> tuple[int, int]:
-        """Populate ``preset_cache`` with chunked snapshots for every
-        ``coursework_given`` preset so the search route has a non-empty corpus
-        without the user having to click Load on the Documents tab.
+        """Populate ``preset_cache`` with chunked snapshots for every preset
+        (both ``coursework_given`` and ``extra_found``) so the web-app search
+        route can search across all 8 document pairs without the user having
+        to click Load on the Documents tab.
+
+        Notebook 1 / QA matrix evaluation still operates on its own corpus
+        and is unaffected — this helper only runs from the FastAPI backend
+        and only writes into ``preset_cache``.
 
         Idempotent: presets that already have a loaded snapshot in
         ``preset_cache`` are skipped. Does NOT mutate the currently active
@@ -257,15 +262,12 @@ class PipelineState:
         from src.chunking import chunk_pages_v2
         from src.response_units import extract_response_units
 
-        coursework_ids = [
-            pid for pid, p in PRESETS.items()
-            if p.dataset_group == "coursework_given"
-        ]
+        all_preset_ids = list(PRESETS.keys())
 
         pairs_loaded = 0
         chunks_loaded = 0
 
-        for pid in coursework_ids:
+        for pid in all_preset_ids:
             if pid in self.preset_cache:
                 # Already loaded (either by this helper or by a previous user
                 # click). Skip without touching anything.

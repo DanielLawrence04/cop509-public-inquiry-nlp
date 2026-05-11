@@ -368,26 +368,34 @@ const DocPairThumb = () => (
 );
 
 /* ── Loaded pairs list ───────────────────────────────────── */
+// Two independent signals are surfaced per row:
+//   • Search chunks  — Task 1 retrieval corpus. Comes from the backend's
+//     per-preset summary (policy_chunks + response_chunks). Only populated
+//     for pairs the search auto-loader has actually built — extras may be
+//     absent, in which case we honestly show "—".
+//   • Final rows     — Task 2 validated-export row count. Comes from
+//     task2DataMap[pairId].recommendations.length, which is hydrated from
+//     the static final-results JSON and so is present for all 8 pairs even
+//     when the backend has not extracted that pair.
+// Treating these as separate avoids the previous bug where a pair with
+// search chunks loaded but no live extract run would render "Recs 0".
 const LoadedPairsList = ({ presets, pairState, presetSummaries, task2DataMap }) => (
   <div>
     {presets.map((p, i) => {
       const summary    = presetSummaries[p.id] || {};
-      const st         = pairState(p.id);
       const hasChunks  = summary.policy_chunks != null || summary.response_chunks != null;
       const totalChunks = hasChunks ? (summary.policy_chunks ?? 0) + (summary.response_chunks ?? 0) : null;
-      // Prefer backend summary count; fall back to the actual row count in
-      // task2DataMap so validated-final-export-only loads also show real recs.
-      const task2Count = task2DataMap?.[p.id]?.recommendations?.length ?? null;
-      const recs = (st === 'loaded')
-        ? (summary.recommendations ?? task2Count)
-        : null;
+      const searchChunks = totalChunks && totalChunks > 0 ? totalChunks : null;
+      // Final rows always come from the static/live task2 data — that's the
+      // authoritative Task 2 row count for the pair.
+      const finalRows = task2DataMap?.[p.id]?.recommendations?.length ?? null;
       return (
         <LoadedPairRow
           key={p.id}
           preset={p}
-          state={st}
-          chunks={totalChunks}
-          recs={recs}
+          state={pairState(p.id)}
+          searchChunks={searchChunks}
+          finalRows={finalRows}
           isLast={i === presets.length - 1}
         />
       );
@@ -402,7 +410,7 @@ const BADGE_META = {
   error:        { label: 'Error',           cls: 'unmatched',   icon: 'warning' },
 };
 
-const LoadedPairRow = ({ preset, state, chunks, recs, isLast }) => {
+const LoadedPairRow = ({ preset, state, searchChunks, finalRows, isLast }) => {
   const badge = BADGE_META[state] || BADGE_META['needs-eval'];
   return (
     <div style={{
@@ -419,13 +427,13 @@ const LoadedPairRow = ({ preset, state, chunks, recs, isLast }) => {
           {preset.slug || preset.id}
         </div>
       </div>
-      <span className="kv">
-        <span className="k">Chunks</span>
-        <span className="v mono tabnum">{chunks ?? '—'}</span>
+      <span className="kv" title="Task 1 retrieval corpus — backend chunks for Hybrid/Semantic/TF-IDF search">
+        <span className="k">Search chunks</span>
+        <span className="v mono tabnum">{searchChunks ?? '—'}</span>
       </span>
-      <span className="kv">
-        <span className="k">Recs</span>
-        <span className="v mono tabnum">{recs ?? '—'}</span>
+      <span className="kv" title="Task 2 validated final-export row count for this pair">
+        <span className="k">Final rows</span>
+        <span className="v mono tabnum">{finalRows ?? '—'}</span>
       </span>
       <span className={"status-badge " + badge.cls}>
         {state === 'loading'
