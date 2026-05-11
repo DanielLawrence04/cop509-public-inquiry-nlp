@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "built_at": "2026-05-11T14:32:14.339587+00:00",
+  "presets": {
+    "behaviour_change": {
+      "policy_chunks": 153,
+      "response_chunks": 23,
+      "response_units": 22
+    },
+    "post_office": {
+      "policy_chunks": 303,
+      "response_chunks": 17,
+      "response_units": 19
+    },
+    "space_economy": {
+      "policy_chunks": 207,
+      "response_chunks": 36,
+      "response_units": 40
+    },
+    "covid_inquiry": {
+      "policy_chunks": 291,
+      "response_chunks": 45,
+      "response_units": 10
+    },
+    "blood_inquiry": {
+      "policy_chunks": 515,
+      "response_chunks": 71,
+      "response_units": 22
+    },
+    "grenfell_phase2": {
+      "policy_chunks": 453,
+      "response_chunks": 129,
+      "response_units": 58
+    },
+    "covid_inquiry_module2": {
+      "policy_chunks": 427,
+      "response_chunks": 36,
+      "response_units": 19
+    },
+    "summer_2024_disorder": {
+      "policy_chunks": 46,
+      "response_chunks": 9,
+      "response_units": 9
+    }
+  }
+}

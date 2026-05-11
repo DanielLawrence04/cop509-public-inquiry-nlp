@@ -172,16 +172,12 @@ def reset():
 def activate_preset(preset_id: str):
     if preset_id not in PRESETS:
         raise HTTPException(status_code=404, detail=f"Unknown preset: {preset_id}")
-    # Cold-backend auto-load: if the user picks a coursework pair from the
-    # Search-tab dropdown before the corpus has been built, populate the
-    # default 5-pair search corpus on demand so activate works without
-    # requiring a Documents-tab click. Skipped if the requested preset is
-    # already cached or if it is an extra/extension pair (those still
-    # require an explicit run/load).
-    if (
-        preset_id not in pipeline.preset_cache
-        and not PRESETS[preset_id].is_extra
-    ):
+    # Cold-backend auto-load: if the user picks any pair from the Search-tab
+    # dropdown before the corpus has been built, populate the full 8-pair
+    # search corpus on demand so activate works without requiring a
+    # Documents-tab click. Covers both coursework_given and extra_found
+    # presets — the hosted demo treats all 8 as searchable.
+    if preset_id not in pipeline.preset_cache:
         try:
             pairs, chunks = pipeline.ensure_default_search_corpus()
             if pairs:

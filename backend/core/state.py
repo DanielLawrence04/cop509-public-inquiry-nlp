@@ -36,6 +36,10 @@ from src.response_units import ResponseUnit
 
 StageStatus = Literal["idle", "running", "done", "error"]
 
+# Bump this when the pickled corpus format changes incompatibly so old files
+# are detected and rejected gracefully rather than causing runtime errors.
+SCHEMA_VERSION: int = 1
+
 
 @dataclass
 class StageState:
@@ -235,6 +239,101 @@ class PipelineState:
             }
             for preset_id, snapshot in self.preset_cache.items()
         }
+
+    def load_prebuilt_corpus(self) -> tuple[int, int]:
+        """Load the prebuilt search corpus from disk into ``preset_cache``.
+
+        Reads files written by ``scripts/precompute_search_corpus.py``.
+        Policy/response paths are resolved from the current ``PRESETS`` config
+        rather than stored in the pickle so the corpus is portable across
+        machines and deploy targets (e.g. local Windows dev → Render Linux).
+
+        Returns ``(pairs_loaded, total_chunks)`` for freshly populated presets.
+
+        Raises:
+            FileNotFoundError: if the prebuilt corpus manifest is missing —
+                callers should treat this as "no prebuilt corpus, use lazy load".
+            ValueError: if the manifest schema version is unsupported.
+        """
+        import json
+        import pickle
+
+        from backend.core.presets import PRESETS
+
+        corpus_dir = Path(__file__).resolve().parents[1] / "data" / "prebuilt_search_corpus"
+        manifest_path = corpus_dir / "manifest.json"
+
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                f"Prebuilt corpus manifest not found: {manifest_path}"
+            )
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("schema_version") != SCHEMA_VERSION:
+            raise ValueError(
+                f"Prebuilt corpus schema version mismatch: "
+                f"expected {SCHEMA_VERSION}, got {manifest.get('schema_version')!r}"
+            )
+
+        pairs_loaded = 0
+        chunks_loaded = 0
+
+        for pid in PRESETS:
+            if pid in self.preset_cache:
+                continue
+
+            pkl_path = corpus_dir / f"{pid}.pkl"
+            if not pkl_path.exists():
+                print(
+                    f"[CORPUS] prebuilt file missing for preset '{pid}' "
+                    f"— will be built lazily on first search",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                continue
+
+            with open(pkl_path, "rb") as fh:
+                data = pickle.load(fh)
+
+            if data.get("schema_version") != SCHEMA_VERSION:
+                print(
+                    f"[CORPUS] skipping '{pid}' — "
+                    f"schema version {data.get('schema_version')!r} != {SCHEMA_VERSION}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                continue
+
+            preset = PRESETS[pid]
+            stages = {
+                "load":     StageState(status="done"),
+                "extract":  StageState(),
+                "align":    StageState(),
+                "classify": StageState(),
+            }
+
+            self.preset_cache[pid] = PipelineSnapshot(
+                stages=stages,
+                policy_path=preset.policy_pdf,
+                response_path=preset.response_pdf,
+                load_ocr=data["load_ocr"],
+                policy_pages=data["policy_pages"],
+                response_pages=data["response_pages"],
+                policy_chunks=data["policy_chunks"],
+                response_chunks=data["response_chunks"],
+                response_units=data.get("response_units", []),
+                recommendations=[],
+                alignments=[],
+                labels=[],
+                evaluation=None,
+                evaluation_status=None,
+            )
+
+            n = len(data["policy_chunks"]) + len(data["response_chunks"])
+            pairs_loaded += 1
+            chunks_loaded += n
+
+        return pairs_loaded, chunks_loaded
 
     def ensure_default_search_corpus(self) -> tuple[int, int]:
         """Populate ``preset_cache`` with chunked snapshots for every preset
