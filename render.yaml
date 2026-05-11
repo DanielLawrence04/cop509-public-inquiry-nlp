@@ -12,5 +12,8 @@ services:
     dockerContext: .
     healthCheckPath: /health
     envVars:
-      - key: CORS_ORIGINS
-        sync: false  # set to the Vercel frontend URL, e.g. https://cop509-public-inquiry-nlp.vercel.app
+      # https://cop509-public-inquiry-nlp.vercel.app is already in the backend
+      # hardcoded defaults, so this env var is optional — only needed to add
+      # extra origins beyond the defaults (comma-separated).
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

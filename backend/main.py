@@ -103,24 +103,52 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Policy Response Analyser API", lifespan=lifespan)
 
-# CORS origins are configurable via the CORS_ORIGINS env var
-# (comma-separated). Local Vite/dev origins are always included so local
-# development keeps working without extra configuration.
-_DEFAULT_ORIGINS = [
+# ---------------------------------------------------------------------------
+# CORS — explicit origins so preflight OPTIONS requests succeed for every
+# allowed caller.  The Vercel production frontend is always included; extra
+# origins can be injected at deploy time via CORS_ALLOWED_ORIGINS (comma-
+# separated list).  The legacy CORS_ORIGINS env var is also checked for
+# backward compatibility.
+# ---------------------------------------------------------------------------
+_DEFAULT_ORIGINS: list[str] = [
+    # Production Vercel frontend
+    "https://cop509-public-inquiry-nlp.vercel.app",
+    # Local Vite dev servers
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
+    "http://127.0.0.1:3000",
 ]
-_extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-_origins = list(dict.fromkeys(_DEFAULT_ORIGINS + _extra))
+
+
+def _parse_origins_env(*var_names: str) -> list[str]:
+    for name in var_names:
+        raw = os.environ.get(name, "")
+        parsed = [o.strip() for o in raw.split(",") if o.strip()]
+        if parsed:
+            return parsed
+    return []
+
+
+_extra_origins = _parse_origins_env("CORS_ALLOWED_ORIGINS", "CORS_ORIGINS")
+_origins: list[str] = list(dict.fromkeys(_DEFAULT_ORIGINS + _extra_origins))
+
+# Log at import time so the Render startup log confirms which origins are
+# allowed before the first request arrives.
+print(
+    f"[CORS] allowed origins ({len(_origins)}): {_origins}",
+    file=sys.stderr,
+    flush=True,
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,          # no cookies/auth headers needed
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
 )
 
 app.include_router(pipeline_route.router, prefix="/api/pipeline", tags=["pipeline"])
