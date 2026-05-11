@@ -45,18 +45,18 @@ jupyter lab
 
 Run in this order:
 
-1. `notebooks/COP509_Notebook1_Search.ipynb`
-2. `notebooks/COP509_Notebook2_Extraction_Alignment.ipynb`
+1. `COP509_Notebook1_Search.ipynb`
+2. `COP509_Notebook2_Extraction_Alignment.ipynb`
 
-Both notebooks detect the project root automatically and use relative paths for `data/`, `src/`, and `outputs/`.
+Both notebooks detect the project root automatically and use relative paths for `data/`, `src/`, and `outputs/`. Inside this submission folder the two notebooks sit at the top level alongside `data/`, `src/`, `outputs/`, `scripts/`, and `backend/`; the `notebooks/` subdirectory used in the GitHub repository is collapsed away here.
 
 ## Export PDFs
 
-From the project root:
+From the submission folder root:
 
 ```powershell
-jupyter nbconvert --to pdf notebooks/COP509_Notebook1_Search.ipynb
-jupyter nbconvert --to pdf notebooks/COP509_Notebook2_Extraction_Alignment.ipynb
+jupyter nbconvert --to pdf COP509_Notebook1_Search.ipynb
+jupyter nbconvert --to pdf COP509_Notebook2_Extraction_Alignment.ipynb
 ```
 
 If local PDF export fails because TeX is unavailable, export through JupyterLab's browser print/PDF flow or another environment with a working PDF toolchain.
@@ -95,9 +95,7 @@ Required notebook inputs:
 
 ## Optional Web App
 
-The optional web app lives in `frontend/` and `backend/`. It is supporting evidence only and is not required to mark the notebooks.
-
-The notebooks and PDF exports remain the official coursework submission. The web app is an optional extension and is not required for marking.
+The optional web app lives in `frontend/` and `backend/` in the public GitHub repository (link below). The submission ZIP only carries the slice of the backend needed by the notebooks (`backend/core/`), so the local-run / deployment instructions below refer to the GitHub repository, not this folder. The notebooks and PDF exports remain the official coursework submission; the web app is an optional extension and is not required for marking.
 
 ### Run the web app locally
 
@@ -121,31 +119,19 @@ The frontend is a static Vite build, and the backend is a FastAPI service.
 For the app to work end-to-end on Vercel, the backend must be hosted
 separately and the frontend must be built with `VITE_API_BASE` pointing at it.
 
-**1. Deploy the backend on Render using Docker (see `Dockerfile` and `render.yaml`):**
+**1. Deploy the backend (Render example, see `render.yaml`):**
 
-The backend is deployed as a Docker service rather than a plain Python service
-because Tesseract OCR must be installed at the system level (Render's Python
-runtime mounts `/var/lib/apt` read-only and apt-get fails). The repo-root
-`Dockerfile` installs `tesseract-ocr` and `tesseract-ocr-eng`, then runs
-`uvicorn` against `backend.main:app`.
-
-Render service settings:
-
-- Environment: **Docker**
-- Dockerfile path: `./Dockerfile`
-- Docker context: `.`
+- Root directory: `.`
+- Build command: `pip install -r backend/requirements.txt`
+- Start command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
 - Health check path: `/health`
 - Environment variables:
-  - `CORS_ORIGINS` = the Vercel frontend URL (e.g. `https://cop509-public-inquiry-nlp.vercel.app`).
+  - `CORS_ORIGINS` = the Vercel frontend URL (e.g. `https://your-app.vercel.app`).
     Comma-separated values are supported; local dev origins are always allowed.
 
-The container's start command is:
-
-```
-python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
-```
-
-Railway/Azure App Service can use the same Dockerfile.
+Railway and Azure App Service work the same way — same build/start commands,
+same `CORS_ORIGINS` variable. Note the start command for the chosen host and
+the resulting public backend URL.
 
 **2. Deploy the frontend to Vercel:**
 
@@ -155,7 +141,7 @@ Railway/Azure App Service can use the same Dockerfile.
 - Output directory: `dist`
 - Environment variable:
   - `VITE_API_BASE` = the deployed backend URL, no trailing slash
-    (current live value: `https://cop509-public-inquiry-nlp.onrender.com`).
+    (e.g. `https://cop509-backend.onrender.com`).
 
 **3. Wire the two together:**
 
