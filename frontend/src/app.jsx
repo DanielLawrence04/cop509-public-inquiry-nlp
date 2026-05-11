@@ -224,40 +224,91 @@ const App = () => {
   const [task2DataMap, setTask2DataMap] = useState({});
   const [logEvents, setLogEvents] = useState([]);
   const [initError, setInitError] = useState(null);
+  // Tracks whether the currently-displayed Recommendation Analysis / Evaluation
+  // Summary data came from the validated final coursework export rather than
+  // a live pipeline run on the hosted backend.
+  const [finalResultsLoaded, setFinalResultsLoaded] = useState(false);
   const pollRef = useRef(null);
+
+  // Load the validated 246-row coursework export from the static asset shipped
+  // with the Vercel frontend (frontend/public/final_recommendations_246.json).
+  // This is intentionally backend-independent so the hosted demo opens
+  // instantly even when the free Render dyno is asleep or unavailable.
+  // Live recomputation via the backend still works and will overwrite the
+  // loaded validated rows for whichever preset is re-run.
+  const loadFinalResults = useCallback(async () => {
+    try {
+      const res = await fetch('/final_recommendations_246.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const payload = await res.json();
+      const adapted = window.adaptFinalExport(payload);
+      setTask2DataMap(prev => ({ ...prev, ...adapted.byPreset }));
+      setLoadedPresetIds(prev => {
+        const next = new Set(prev);
+        Object.keys(adapted.byPreset).forEach(k => next.add(k));
+        return next;
+      });
+      // Fall back to synthesised preset labels when the backend presets
+      // endpoint hasn't (yet) responded — keeps pair labels readable.
+      setPresets(prev => (prev && prev.length > 0) ? prev : adapted.syntheticPresets);
+      setFinalResultsLoaded(true);
+      return adapted;
+    } catch (err) {
+      // No log helper available yet here — surface via console only; the
+      // banner won't show and the UI falls through to whatever the backend
+      // provides instead.
+      console.warn('Validated final export load failed:', err);
+      throw err;
+    }
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     localStorage.setItem('pra-dark', dark ? '1' : '0');
   }, [dark]);
 
-  // Fetch presets on mount
+  // Auto-load the validated final export on mount. Runs independently of the
+  // backend so a cold/asleep Render dyno never blocks the demo.
+  useEffect(() => {
+    loadFinalResults().catch(() => {});
+  }, [loadFinalResults]);
+
+  // Fetch presets on mount (best-effort — backend may be cold/asleep)
   useEffect(() => {
     window.apiFetch('/api/pipeline/presets')
       .then(data => setPresets(Array.isArray(data) ? data : data.presets || []))
-      .catch(err => setInitError('Backend unavailable: ' + err.message));
+      .catch(() => {
+        // Silent: validated-final-export auto-load above seeds synthetic
+        // presets so the UI keeps working without a backend.
+      });
   }, []);
 
-  // Fetch initial pipeline status
+  // Fetch initial pipeline status (best-effort). If a live run is complete on
+  // the backend, prefer it for that preset; otherwise the static export
+  // already populated task2DataMap above.
   useEffect(() => {
     window.apiFetch('/api/pipeline/status').then(s => {
       setStatus(s);
       if (s.preset_id) setActivePresetId(s.preset_id);
-      // Restore loaded-pairs set from backend state (page reload case)
       if (s.preset_statuses) {
         const completed = Object.entries(s.preset_statuses)
           .filter(([, v]) => v === 'complete')
           .map(([k]) => k);
-        if (completed.length > 0) setLoadedPresetIds(new Set(completed));
+        if (completed.length > 0) setLoadedPresetIds(prev => {
+          const next = new Set(prev);
+          completed.forEach(k => next.add(k));
+          return next;
+        });
       }
-      // If pipeline already has results, load them
       if (s.stages?.extract?.status === 'done') {
         window.apiFetch('/api/pipeline/task2/results').then(d => {
           setTask2Data(d);
           if (s.preset_id) setTask2DataMap(prev => ({ ...prev, [s.preset_id]: d }));
         }).catch(() => {});
       }
-    }).catch(() => {});
+    }).catch(() => {
+      // Backend unavailable — static validated export already loaded above.
+    });
   }, []);
 
   const addLog = useCallback((stage, message, ms, statusStr = 'info') => {
@@ -515,6 +566,7 @@ const App = () => {
     activatePreset, runStage, resetPipeline, addLog, recStage, isRunning,
     batchEvaluate, isBatchRunning,
     runPairPipeline, pairLoadingState,
+    finalResultsLoaded, loadFinalResults,
   };
 
   const Screen = {
@@ -546,6 +598,27 @@ const App = () => {
                 color:'var(--err-fg)', fontSize:13, marginBottom:14,
               }}>
                 {initError}
+              </div>
+            )}
+            {finalResultsLoaded && (route === 'recommendations' || route === 'evaluation') && (
+              <div style={{
+                padding:'10px 14px', background:'var(--info-bg, #eef4ff)',
+                border:'1px solid var(--info-bd, #c7d7ff)', borderRadius:'var(--r-md)',
+                color:'var(--info-fg, #1f3a8a)', fontSize:12.5, marginBottom:14,
+                display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
+              }}>
+                <span>
+                  Showing validated final coursework output. Live recomputation is
+                  available through the backend but may be slower on the hosted demo.
+                </span>
+                <button
+                  className="btn"
+                  style={{fontSize:12, padding:'4px 10px'}}
+                  onClick={() => loadFinalResults().catch(() => {})}
+                  title="Re-fetch the validated 246-row export"
+                >
+                  Reload validated final results
+                </button>
               </div>
             )}
             <Screen/>
