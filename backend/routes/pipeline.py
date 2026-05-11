@@ -172,6 +172,33 @@ def reset():
 def activate_preset(preset_id: str):
     if preset_id not in PRESETS:
         raise HTTPException(status_code=404, detail=f"Unknown preset: {preset_id}")
+    # Cold-backend auto-load: if the user picks a coursework pair from the
+    # Search-tab dropdown before the corpus has been built, populate the
+    # default 5-pair search corpus on demand so activate works without
+    # requiring a Documents-tab click. Skipped if the requested preset is
+    # already cached or if it is an extra/extension pair (those still
+    # require an explicit run/load).
+    if (
+        preset_id not in pipeline.preset_cache
+        and not PRESETS[preset_id].is_extra
+    ):
+        try:
+            pairs, chunks = pipeline.ensure_default_search_corpus()
+            if pairs:
+                log.emit(
+                    "pipeline.activate.autoload",
+                    f"loaded {pairs} pairs, {chunks} chunks",
+                    "ok",
+                )
+        except Exception as exc:
+            log.emit("pipeline.activate.autoload", f"load failed: {exc}", "err")
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Search corpus could not be prepared "
+                    f"({type(exc).__name__}: {exc})."
+                ),
+            )
     if not pipeline.activate_cached(preset_id):
         raise HTTPException(status_code=404, detail=f"No cached results for preset: {preset_id}")
 
@@ -613,6 +640,165 @@ def _task2_results_payload() -> Task2ResultsResponse:
 @router.get("/task2/results", response_model=Task2ResultsResponse)
 def task2_results():
     return _task2_results_payload()
+
+
+# ── Validated final-export passthrough ────────────────────────────────────────
+# Read-only view of the validated coursework final export so the hosted demo
+# can load the 246-row evidence file without re-running the pipeline on a free
+# Render dyno. Does not mutate pipeline state and never writes the JSON.
+
+_FINAL_JSON_PATH = Path(__file__).resolve().parents[2] / "outputs" / "final_recommendations_246.json"
+
+# Map the validated JSON's normalised classification strings to the
+# backend's `best_label` vocabulary (so the frontend's existing LABEL_MAP
+# adapter handles them unchanged).
+_FINAL_LABEL_TO_BEST = {
+    "accepted": "accepted",
+    "partial": "partially_accepted",
+    "partially_accepted": "partially_accepted",
+    "rejected": "rejected",
+    "not_addressed": "not_addressed",
+}
+
+
+def _final_row_to_task2_rec(idx: int, row: dict, preset) -> Task2RecommendationModel:
+    debug = row.get("debug") or {}
+    matched_text = row.get("matched_response_text")
+    matched_page = row.get("matched_response_page")
+    alignment_conf = float(debug.get("alignment_confidence", row.get("confidence", 0.0)) or 0.0)
+    lex_sim = float(debug.get("lexical_similarity", alignment_conf) or 0.0)
+    cls_conf = debug.get("classification_confidence")
+    cls_conf = float(cls_conf) if cls_conf is not None else None
+    best_label = _FINAL_LABEL_TO_BEST.get(str(row.get("classification") or ""), "not_addressed")
+
+    best_match = None
+    if matched_text:
+        best_match = Task2MatchModel(
+            matched_text=str(matched_text),
+            source=str(preset.response_pdf.name) if preset else None,
+            page_number=int(matched_page) if isinstance(matched_page, int) else (
+                int(matched_page) if isinstance(matched_page, str) and matched_page.isdigit() else None
+            ),
+            similarity=lex_sim,
+            alignment_confidence=alignment_conf,
+            label=best_label,
+            label_display=_label_display(best_label),
+            match_method=str(debug.get("alignment_method") or "validated_final_export"),
+        )
+
+    rec_page = row.get("recommendation_page")
+    page_number: int | str | None
+    if isinstance(rec_page, int):
+        page_number = rec_page
+    elif isinstance(rec_page, str) and rec_page.strip():
+        page_number = rec_page
+    else:
+        page_number = None
+
+    return Task2RecommendationModel(
+        rec_id=idx,
+        item_label=str(row.get("id") or idx),
+        text=str(row.get("recommendation_text") or ""),
+        document=str(preset.policy_pdf.name) if preset else "",
+        page_number=page_number,
+        detector="validated_final_export",
+        extraction_method="validated_final_export",
+        confidence=float(row.get("confidence", 0.0) or 0.0),
+        ocr=False,
+        matches=[best_match] if best_match else [],
+        best_match=best_match,
+        best_label=best_label,
+        label_display=_label_display(best_label),
+        best_similarity=lex_sim,
+        alignment_confidence=alignment_conf,
+        classification_confidence=cls_conf,
+        classifier_method=str(debug.get("classifier_method") or "rule_based"),
+        classification_rationale="Loaded from validated coursework final export.",
+        extraction_source="validated_final_export",
+        source_document_role="policy",
+    )
+
+
+@router.get("/final-results")
+def final_results():
+    """Return the validated 246-row coursework export grouped by preset.
+
+    Shape:
+      {
+        "source": "validated_final_export",
+        "summary": {total, pair_counts, classification_distribution},
+        "by_preset": {preset_id: Task2ResultsResponse-shaped dict},
+      }
+    """
+    import json
+
+    if not _FINAL_JSON_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Validated final export not found at {_FINAL_JSON_PATH}.",
+        )
+
+    with _FINAL_JSON_PATH.open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    rows = payload.get("recommendations") or []
+
+    rows_by_pair: dict[str, list[dict]] = {}
+    classification_distribution: dict[str, int] = {}
+    for row in rows:
+        pair = str(row.get("document_pair") or "")
+        rows_by_pair.setdefault(pair, []).append(row)
+        cls = str(row.get("classification") or "not_addressed")
+        classification_distribution[cls] = classification_distribution.get(cls, 0) + 1
+
+    by_preset: dict[str, dict] = {}
+    pair_counts: dict[str, int] = {}
+    for preset_id, preset_rows in rows_by_pair.items():
+        preset = PRESETS.get(preset_id)
+        task2_recs = [
+            _final_row_to_task2_rec(idx, row, preset)
+            for idx, row in enumerate(preset_rows)
+        ]
+        mean_align = (
+            sum(r.alignment_confidence for r in task2_recs) / len(task2_recs)
+            if task2_recs else 0.0
+        )
+        mean_extract = (
+            sum(r.confidence for r in task2_recs) / len(task2_recs)
+            if task2_recs else 0.0
+        )
+        stages = {"load": "done", "extract": "done", "align": "done", "classify": "done"}
+        response = Task2ResultsResponse(
+            preset_id=preset_id,
+            stages=stages,
+            summary=Task2SummaryModel(
+                recommendations=len(task2_recs),
+                alignments=sum(1 for r in task2_recs if r.best_match is not None),
+                classified=len(task2_recs),
+                mean_extraction_confidence=mean_extract,
+                mean_alignment_confidence=mean_align,
+            ),
+            recommendations=task2_recs,
+            evaluation=None,
+            evaluation_status=(
+                "Validated final export: 246-row coursework evidence. "
+                "Full manual ground-truth labels are unavailable, so accuracy/F1 "
+                "metrics are not computed here — see Notebook 2 for the "
+                "prediction-only evaluation."
+            ),
+        )
+        by_preset[preset_id] = response.model_dump()
+        pair_counts[preset_id] = len(task2_recs)
+
+    return {
+        "source": "validated_final_export",
+        "exported_at": payload.get("exported_at"),
+        "summary": {
+            "total": len(rows),
+            "pair_counts": pair_counts,
+            "classification_distribution": classification_distribution,
+        },
+        "by_preset": by_preset,
+    }
 
 
 # ── Stage 4: Classify ─────────────────────────────────────────────────────────
