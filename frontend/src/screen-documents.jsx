@@ -40,7 +40,7 @@ const DocumentsScreen = () => {
 
   // Derive per-pair state from in-flight loading > backend status > static
   // task2DataMap presence. Order matters: an active load should still show
-  // the spinner even if the static export already populated rows.
+  // the spinner even if the validated export already populated rows.
   const pairState = (id) => {
     const local = pairLoadingState?.[id];
     if (local === 'loading') return 'loading';
@@ -67,10 +67,10 @@ const DocumentsScreen = () => {
 
   const anyPairLoading = Object.values(pairLoadingState || {}).some(v => v === 'loading');
   const batchBusy      = isBatchRunning || anyPairLoading;
-  // When the validated static export already covers every visible preset
-  // (the hosted demo's default state), Batch evaluate all would only kick
+  // When the validated export already covers every visible preset
+  // (the default local static-evidence state), Batch evaluate all would only kick
   // off unnecessary live recomputation. Disable it in that case so the
-  // marker can't accidentally trigger backend work the demo doesn't need.
+  // marker can't accidentally trigger backend work that is not needed.
   const allStaticLoaded = finalResultsLoaded
     && presets.length > 0
     && presets.every(p => hasTask2(p.id));

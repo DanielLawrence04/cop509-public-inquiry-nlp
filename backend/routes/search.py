@@ -1,7 +1,8 @@
 """Search endpoint — TF-IDF, semantic, and hybrid retrieval.
 
 Default retriever is hybrid (adaptive TF-IDF + MiniLM blend).
-Falls back gracefully to tfidf when sentence-transformers is unavailable.
+Falls back gracefully to tfidf when sentence-transformers is unavailable
+or ENABLE_SEMANTIC_SEARCH=false (local lightweight mode).
 
 Each result is enriched with:
   matched_terms — non-stopword query tokens present in the chunk text
@@ -48,11 +49,19 @@ def _dlog(msg: str) -> None:
         print(f"[DEBUG_SEARCH route] {msg}", file=sys.stderr, flush=True)
 
 
-print(
-    f"[SEARCH] route loaded | SEMANTIC_SEARCH_VERSION={SEMANTIC_SEARCH_VERSION}",
-    file=sys.stderr,
-    flush=True,
-)
+if SEMANTIC_AVAILABLE:
+    print(
+        f"[SEARCH] route loaded | semantic=enabled | SEMANTIC_SEARCH_VERSION={SEMANTIC_SEARCH_VERSION}",
+        file=sys.stderr,
+        flush=True,
+    )
+else:
+    print(
+        f"[SEARCH] route loaded | semantic=disabled (local lightweight mode) "
+        f"| lexical search active | SEMANTIC_SEARCH_VERSION={SEMANTIC_SEARCH_VERSION}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 # Clear stale embedding cache on hot-reload.
 if pipeline.embeddings_cache:
@@ -72,8 +81,8 @@ _DEFAULT_CORPUS_LOCK = asyncio.Lock()
 
 async def _ensure_default_search_corpus_loaded() -> None:
     """Load the 5 coursework pairs into ``preset_cache`` if the search corpus
-    is empty so the hosted demo doesn't require the user to click Load on the
-    Documents tab. Idempotent and safe to call on every request.
+    is empty so the local app can search immediately. Idempotent and safe to
+    call on every request.
 
     Raises ``HTTPException(500)`` with a clear, user-facing reason if the
     underlying PDFs are missing or the loader crashes.
@@ -115,8 +124,8 @@ async def _ensure_default_search_corpus_loaded() -> None:
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    f"Search corpus could not be prepared — required PDF is "
-                    f"missing from the backend deployment: {exc}"
+                    f"Search corpus could not be prepared because a required "
+                    f"local PDF is missing: {exc}"
                 ),
             )
         except Exception as exc:
@@ -186,23 +195,23 @@ async def search(body: SearchRequest):
     if not body.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
-    needs_embeddings = body.retriever in ("semantic", "hybrid")
-
-    if needs_embeddings and not SEMANTIC_AVAILABLE:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Hybrid/semantic retriever unavailable — "
-                "install sentence-transformers to enable. "
-                "Switch to TF-IDF for keyword-only search."
-            ),
+    # Downgrade semantic/hybrid to tfidf when sentence-transformers is not
+    # available (or ENABLE_SEMANTIC_SEARCH=false in local lightweight mode).
+    retriever = body.retriever
+    if retriever in ("semantic", "hybrid") and not SEMANTIC_AVAILABLE:
+        print(
+            f"[SEARCH] downgrading retriever={retriever!r} → 'tfidf' "
+            "(semantic search disabled — lexical fallback active)",
+            file=sys.stderr,
+            flush=True,
         )
+        retriever = "tfidf"
 
-    # Cold-backend auto-load: the hosted Documents tab is read-only (preloaded
-    # from the static final-results JSON), so users can't click Load to
-    # populate policy_chunks. Build the default 5-pair coursework corpus on
-    # first search instead. Idempotent; the lock inside coalesces concurrent
-    # first-hits.
+    needs_embeddings = retriever in ("semantic", "hybrid")
+
+    # Auto-load the local corpus on first search so users can search before
+    # manually loading a pair on the Documents tab. Idempotent; the lock inside
+    # coalesces concurrent first hits.
     await _ensure_default_search_corpus_loaded()
 
     # ---- Build chunk pool ------------------------------------------------
@@ -287,18 +296,18 @@ async def search(body: SearchRequest):
             )
         print(
             f"[SEARCH] {SEMANTIC_SEARCH_VERSION} | query={body.query!r} "
-            f"retriever={body.retriever} scope={body.scope} "
+            f"retriever={retriever} scope={body.scope} "
             f"chunks={len(chunks)} embs={embeddings.shape}",
             file=sys.stderr,
             flush=True,
         )
 
     # ---- Run retrieval ---------------------------------------------------
-    if body.retriever == "tfidf":
+    if retriever == "tfidf":
         from src.search import keyword_search
         results = keyword_search(body.query, chunks, top_k=body.top_k)
 
-    elif body.retriever == "semantic":
+    elif retriever == "semantic":
         from src.search import semantic_search
         results = await asyncio.to_thread(
             semantic_search, body.query, chunks, embeddings, body.top_k
@@ -317,7 +326,7 @@ async def search(body: SearchRequest):
     from src.chunking import detect_chunk_heading
 
     query_type = detect_query_type(body.query)
-    alpha = recommended_alpha(body.query) if body.retriever == "hybrid" else None
+    alpha = recommended_alpha(body.query) if retriever == "hybrid" else None
 
     expanded = expand_with_context(results, chunks, window=1)
 
@@ -353,7 +362,7 @@ async def search(body: SearchRequest):
         "tfidf": "search.keyword_search",
         "semantic": "search.semantic_search",
         "hybrid": "search.hybrid_search",
-    }.get(body.retriever, "search.search")
+    }.get(retriever, "search.search")
 
     log.emit(
         log_event,
@@ -365,7 +374,7 @@ async def search(body: SearchRequest):
     return SearchResponse(
         results=enriched,
         query=body.query,
-        retriever=body.retriever,
+        retriever=retriever,
         scope=body.scope,
         elapsed_ms=elapsed,
         chunks_searched=len(chunks),

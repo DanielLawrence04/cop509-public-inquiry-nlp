@@ -1,18 +1,16 @@
 // shim.jsx — small adapters shared across screens.
 
 // ── Static validated-final-export adapter ─────────────────────
-// Converts the raw 246-row coursework export (outputs/final_recommendations_246.json,
-// served as a static asset from frontend/public/) into the per-preset Task2
+// Converts the canonical 246-row coursework export into the per-preset Task2
 // shape that the Recommendation Analysis and Evaluation Summary screens
-// already consume. This lets the hosted Vercel demo render the validated
-// evidence without depending on the Render backend.
+// already consume.
 //
 // Returns: { byPreset: {presetId: Task2ResultsResponse-shaped}, summary, source }
 window.adaptFinalExport = function(payload) {
   const rows = (payload && payload.recommendations) || [];
 
   // Friendly labels for synthesised preset entries used when the backend
-  // /api/pipeline/presets endpoint is unavailable (e.g. Render cold start).
+  // /api/pipeline/presets endpoint is unavailable.
   const PRESET_LABELS = {
     behaviour_change: { label: 'Behaviour Change', group: 'coursework_given', group_label: 'Coursework given documents' },
     post_office: { label: 'Post Office Horizon Inquiry', group: 'coursework_given', group_label: 'Coursework given documents' },
@@ -146,4 +144,26 @@ window.adaptFinalExport = function(payload) {
     byPreset,
     syntheticPresets,
   };
+};
+
+window.adaptFinalResultsPayload = function(payload) {
+  if (payload && payload.by_preset) {
+    const byPreset = payload.by_preset || {};
+    const syntheticPresets = Object.keys(byPreset).map(presetId => ({
+      id: presetId,
+      label: presetId,
+      dataset_group: 'coursework_given',
+      group_label: 'Loaded results',
+      group_description: '',
+      is_extra: false,
+    }));
+    return {
+      source: payload.source || 'validated_final_export',
+      exported_at: payload.exported_at,
+      summary: payload.summary || {},
+      byPreset,
+      syntheticPresets,
+    };
+  }
+  return window.adaptFinalExport(payload);
 };

@@ -1,8 +1,7 @@
-"""Precompute the default hosted search corpus and save it to disk.
+"""Precompute the default local search corpus and save it to disk.
 
-Run this script before committing/deploying so the backend can load the
-corpus instantly on startup without re-processing PDFs during the Render
-health-check window.
+Run this script when the source PDFs or chunking logic changes so the local
+backend can load the corpus instantly on startup without re-processing PDFs.
 
 Usage (from the repo root):
     python scripts/precompute_search_corpus.py
@@ -13,8 +12,8 @@ response units, and writes one pickle file per preset plus a manifest to:
 
     backend/data/prebuilt_search_corpus/
 
-Commit the generated files.  On deploy, the FastAPI lifespan will load them
-in milliseconds instead of rebuilding from PDFs.
+The FastAPI lifespan loads the generated files in milliseconds instead of
+rebuilding from PDFs.
 """
 from __future__ import annotations
 
@@ -128,11 +127,7 @@ def main() -> None:
     if skipped:
         print(f"[precompute] skipped (PDFs missing): {', '.join(skipped)}", flush=True)
     print(f"[precompute] corpus saved to: {OUT_DIR}", flush=True)
-    print(
-        "[precompute] commit the generated .pkl and manifest.json files "
-        "so Render can load them on deploy.",
-        flush=True,
-    )
+    print("[precompute] generated .pkl and manifest.json files are ready.", flush=True)
 
 
 if __name__ == "__main__":

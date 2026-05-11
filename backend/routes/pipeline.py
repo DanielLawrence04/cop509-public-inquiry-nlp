@@ -176,7 +176,7 @@ def activate_preset(preset_id: str):
     # dropdown before the corpus has been built, populate the full 8-pair
     # search corpus on demand so activate works without requiring a
     # Documents-tab click. Covers both coursework_given and extra_found
-    # presets — the hosted demo treats all 8 as searchable.
+    # presets - the local app treats all 8 as searchable.
     if preset_id not in pipeline.preset_cache:
         try:
             pairs, chunks = pipeline.ensure_default_search_corpus()
@@ -639,9 +639,9 @@ def task2_results():
 
 
 # ── Validated final-export passthrough ────────────────────────────────────────
-# Read-only view of the validated coursework final export so the hosted demo
-# can load the 246-row evidence file without re-running the pipeline on a free
-# Render dyno. Does not mutate pipeline state and never writes the JSON.
+# Read-only view of the validated coursework final export so the local UI can
+# load the 246-row evidence file without re-running the full pipeline. Does
+# not mutate pipeline state and never writes the JSON.
 
 _FINAL_JSON_PATH = Path(__file__).resolve().parents[2] / "outputs" / "final_recommendations_246.json"
 

@@ -1,30 +1,46 @@
 """In-memory pipeline state — single source of truth shared across all routes."""
 from __future__ import annotations
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-# Probe sentence-transformers availability up front and log a single, clearly
-# labelled line on import so Render / Docker logs make the cause obvious when
-# hybrid search is unavailable.
-try:
-    import sentence_transformers as _st  # noqa: F401
-    SEMANTIC_AVAILABLE: bool = True
-    print(
-        f"[STATE] SEMANTIC_AVAILABLE=True | sentence-transformers="
-        f"{getattr(_st, '__version__', '?')}",
-        file=sys.stderr,
-        flush=True,
-    )
-except Exception as _semantic_exc:  # pragma: no cover - logged for ops visibility
+# Respect ENABLE_SEMANTIC_SEARCH so local runs can opt into lightweight mode
+# without loading sentence-transformers or downloading model weights. Default
+# is True for local coursework exploration.
+_semantic_env = os.environ.get("ENABLE_SEMANTIC_SEARCH", "true").lower()
+_semantic_requested = _semantic_env not in ("false", "0", "no", "off")
+
+if not _semantic_requested:
     SEMANTIC_AVAILABLE: bool = False
     print(
-        f"[STATE] SEMANTIC_AVAILABLE=False | reason={type(_semantic_exc).__name__}: "
-        f"{_semantic_exc}",
+        "[STATE] SEMANTIC_AVAILABLE=False | ENABLE_SEMANTIC_SEARCH=false "
+        "(local lightweight mode - sentence-transformers not imported)",
         file=sys.stderr,
         flush=True,
     )
+else:
+    # Probe sentence-transformers availability and log a single, clearly
+    # labelled line so local startup output explains when hybrid search is
+    # unavailable.
+    try:
+        import sentence_transformers as _st  # noqa: F401
+        SEMANTIC_AVAILABLE: bool = True
+        print(
+            f"[STATE] SEMANTIC_AVAILABLE=True | sentence-transformers="
+            f"{getattr(_st, '__version__', '?')}",
+            file=sys.stderr,
+            flush=True,
+        )
+    except Exception as _semantic_exc:  # pragma: no cover
+        SEMANTIC_AVAILABLE: bool = False
+        print(
+            f"[STATE] SEMANTIC_AVAILABLE=False | reason={type(_semantic_exc).__name__}: "
+            f"{_semantic_exc}",
+            file=sys.stderr,
+            flush=True,
+        )
 import copy
 
 from src.chunking import Chunk
@@ -246,7 +262,7 @@ class PipelineState:
         Reads files written by ``scripts/precompute_search_corpus.py``.
         Policy/response paths are resolved from the current ``PRESETS`` config
         rather than stored in the pickle so the corpus is portable across
-        machines and deploy targets (e.g. local Windows dev → Render Linux).
+        machines and operating systems.
 
         Returns ``(pairs_loaded, total_chunks)`` for freshly populated presets.
 

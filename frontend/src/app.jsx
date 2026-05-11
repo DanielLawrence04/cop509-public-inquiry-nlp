@@ -226,22 +226,17 @@ const App = () => {
   const [initError, setInitError] = useState(null);
   // Tracks whether the currently-displayed Recommendation Analysis / Evaluation
   // Summary data came from the validated final coursework export rather than
-  // a live pipeline run on the hosted backend.
+  // a live local pipeline run.
   const [finalResultsLoaded, setFinalResultsLoaded] = useState(false);
   const pollRef = useRef(null);
 
-  // Load the validated 246-row coursework export from the static asset shipped
-  // with the Vercel frontend (frontend/public/final_recommendations_246.json).
-  // This is intentionally backend-independent so the hosted demo opens
-  // instantly even when the free Render dyno is asleep or unavailable.
+  // Load the validated 246-row coursework export from the local backend.
   // Live recomputation via the backend still works and will overwrite the
   // loaded validated rows for whichever preset is re-run.
   const loadFinalResults = useCallback(async () => {
     try {
-      const res = await fetch('/final_recommendations_246.json', { cache: 'no-cache' });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const payload = await res.json();
-      const adapted = window.adaptFinalExport(payload);
+      const payload = await window.apiFetch('/api/pipeline/final-results');
+      const adapted = window.adaptFinalResultsPayload(payload);
       setTask2DataMap(prev => ({ ...prev, ...adapted.byPreset }));
       setLoadedPresetIds(prev => {
         const next = new Set(prev);
@@ -267,25 +262,23 @@ const App = () => {
     localStorage.setItem('pra-dark', dark ? '1' : '0');
   }, [dark]);
 
-  // Auto-load the validated final export on mount. Runs independently of the
-  // backend so a cold/asleep Render dyno never blocks the demo.
+  // Auto-load the validated final export on mount from the local backend.
   useEffect(() => {
     loadFinalResults().catch(() => {});
   }, [loadFinalResults]);
 
-  // Fetch presets on mount (best-effort — backend may be cold/asleep)
+  // Fetch presets on mount (best-effort; backend may not be running yet).
   useEffect(() => {
     window.apiFetch('/api/pipeline/presets')
       .then(data => setPresets(Array.isArray(data) ? data : data.presets || []))
       .catch(() => {
-        // Silent: validated-final-export auto-load above seeds synthetic
-        // presets so the UI keeps working without a backend.
+        // Silent: the final-results preload will provide rows after the
+        // local backend is available.
       });
   }, []);
 
   // Fetch initial pipeline status (best-effort). If a live run is complete on
-  // the backend, prefer it for that preset; otherwise the static export
-  // already populated task2DataMap above.
+  // the backend, prefer it for that preset.
   useEffect(() => {
     window.apiFetch('/api/pipeline/status').then(s => {
       setStatus(s);
@@ -306,9 +299,7 @@ const App = () => {
           if (s.preset_id) setTask2DataMap(prev => ({ ...prev, [s.preset_id]: d }));
         }).catch(() => {});
       }
-    }).catch(() => {
-      // Backend unavailable — static validated export already loaded above.
-    });
+    }).catch(() => {});
   }, []);
 
   const addLog = useCallback((stage, message, ms, statusStr = 'info') => {

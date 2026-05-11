@@ -9,10 +9,11 @@ PyMuPDF>=1.24
 pytesseract>=0.3.10
 pillow>=10.0
 
-# Semantic / hybrid passage retrieval (Notebook 1 + Search tab).
-# torch CPU-only wheel is pinned in the Dockerfile via --extra-index-url so the
-# Render image stays under the free-tier size budget; sentence-transformers
-# brings the MiniLM bi-encoder used by build_embeddings / semantic_search /
-# hybrid_search in src/search.py.
-sentence-transformers>=2.7,<6
-huggingface-hub>=0.20
+# sentence-transformers and huggingface-hub are intentionally omitted from
+# this minimal local backend file. The backend respects
+# ENABLE_SEMANTIC_SEARCH=false and will not import or download any model when
+# that flag is off.
+#
+# To enable semantic/hybrid search locally:
+#   pip install "sentence-transformers>=2.7,<6" "huggingface-hub>=0.20"
+# and set ENABLE_SEMANTIC_SEARCH=true in your environment.
