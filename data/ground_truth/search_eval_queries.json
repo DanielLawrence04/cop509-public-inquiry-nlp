@@ -1,0 +1,92 @@
+[
+  {
+    "query_id": "q1",
+    "query": "evidence based behaviour change interventions",
+    "description": "Find passages discussing whether behaviour change policy is evidence-based and properly evaluated.",
+    "relevant_passages": [
+      {
+        "source": "Behaviour-Change-Report-Recomm.pdf",
+        "anchor": "what works are more likely to be successful than those which are not"
+      },
+      {
+        "source": "Behaviour-Change-Report-Recomm.pdf",
+        "anchor": "whether current government behaviour change interventions are evidence-based"
+      }
+    ]
+  },
+  {
+    "query_id": "q2",
+    "query": "full and fair financial redress for postmasters",
+    "description": "Retrieve recommendation passages about defining full and fair financial redress and supporting claimants.",
+    "relevant_passages": [
+      {
+        "source": "PostOfficeHorizon-I- Inquiry-Recomm.pdf",
+        "anchor": "public announcement explaining what is meant by the phrase \"full and fair financial redress\""
+      },
+      {
+        "source": "PostOfficeHorizon-I- Inquiry-Recomm.pdf",
+        "anchor": "legal advice funded by the Department prior to choosing"
+      }
+    ]
+  },
+  {
+    "query_id": "q3",
+    "query": "orbital debris risk to spacecraft",
+    "description": "Find discussion of orbital debris as a risk in the space economy.",
+    "relevant_passages": [
+      {
+        "source": "TheSpaceEconomyReport.pdf",
+        "anchor": "50,000 trackable pieces of orbital debris"
+      },
+      {
+        "source": "TheSpaceEconomyReport.pdf",
+        "anchor": "damage a spacecraft"
+      }
+    ]
+  },
+  {
+    "query_id": "q4",
+    "query": "UK-wide pandemic response exercise",
+    "description": "Retrieve recommendation passages about regular pandemic response exercises and preparedness planning.",
+    "relevant_passages": [
+      {
+        "source": "UK-Covid-19-Inquiry-Module-1-Recomm.pdf",
+        "anchor": "Recommendation 6: A regular UK-wide pandemic response exercise"
+      },
+      {
+        "source": "UK-Covid-19-Inquiry-Module-1-Recomm.pdf",
+        "anchor": "test, trace and isolate schemes"
+      }
+    ]
+  },
+  {
+    "query_id": "q5",
+    "query": "lack of openness transparency and candour infected blood",
+    "description": "Find passages summarising the inquiry's criticism of openness and candour in the infected blood case.",
+    "relevant_passages": [
+      {
+        "source": "Volume_1-Blood-Inquiry-Recomm.pdf",
+        "anchor": "lack of openness, transparency and candour"
+      },
+      {
+        "source": "Volume_1-Blood-Inquiry-Recomm.pdf",
+        "anchor": "truth has been hidden for decades"
+      }
+    ]
+  },
+  {
+    "query_id": "q6",
+    "query": "private capital in the UK space sector",
+    "description": "Retrieve passages about attracting private capital and scaling UK space firms.",
+    "relevant_passages": [
+      {
+        "source": "TheSpaceEconomyReport.pdf",
+        "anchor": "Attracting private capital"
+      },
+      {
+        "source": "TheSpaceEconomyReport.pdf",
+        "anchor": "The sector has a vibrant start-up and R&D ecosystem but firms struggle to commercialise and scale-up"
+      }
+    ]
+  }
+]

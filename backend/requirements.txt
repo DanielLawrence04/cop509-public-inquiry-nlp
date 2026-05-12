@@ -1,0 +1,19 @@
+fastapi>=0.111
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+numpy>=1.26
+pandas>=2.1
+scikit-learn>=1.4
+PyMuPDF>=1.24
+pytesseract>=0.3.10
+pillow>=10.0
+
+# sentence-transformers and huggingface-hub are intentionally omitted from
+# this minimal local backend file. The backend respects
+# ENABLE_SEMANTIC_SEARCH=false and will not import or download any model when
+# that flag is off.
+#
+# To enable semantic/hybrid search locally:
+#   pip install "sentence-transformers>=2.7,<6" "huggingface-hub>=0.20"
+# and set ENABLE_SEMANTIC_SEARCH=true in your environment.

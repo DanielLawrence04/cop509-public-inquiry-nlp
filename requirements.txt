@@ -1,0 +1,23 @@
+# COP509 notebook dependencies
+
+# Core data science and retrieval
+numpy>=1.26
+pandas>=2.1
+scikit-learn>=1.4
+matplotlib>=3.8
+
+# PDF ingestion
+pymupdf>=1.24
+pytesseract>=0.3.10
+pillow>=10.0
+
+# Notebook execution, widgets and export
+ipykernel>=6.29
+ipywidgets>=8.1
+jupyterlab>=4.1
+notebook>=7.1
+nbconvert>=7.16
+
+# Optional semantic/hybrid search extension:
+# install manually if you want to enable MiniLM embeddings in Notebook 1.
+# sentence-transformers>=2.7

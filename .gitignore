@@ -1,0 +1,59 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+ENV/
+
+# Python caches and test/runtime artefacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Jupyter/editor/OS files
+.jupyter/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and temporary archives
+*.log
+*.tmp
+*.bak
+backend-*.out.log
+backend-*.err.log
+NLP.zip
+*.zip
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
+# Runtime/generated outputs
+outputs/cache/**
+!outputs/cache/.gitkeep
+outputs/figures/**
+!outputs/figures/.gitkeep
+outputs/tables/*.json
+outputs/tables/*.csv
+
+# Keep canonical submission evidence
+!outputs/final_recommendations_246.json
+!outputs/evaluation_predictions.csv
+
+# Generated processed data
+data/processed/*.json
+!data/processed/.gitkeep
+
+# Local assistant/tooling files
+.claude/
