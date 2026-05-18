@@ -201,7 +201,7 @@ async def search(body: SearchRequest):
     if retriever in ("semantic", "hybrid") and not SEMANTIC_AVAILABLE:
         print(
             f"[SEARCH] downgrading retriever={retriever!r} → 'tfidf' "
-            "(semantic search disabled — lexical fallback active)",
+            "(optional semantic/hybrid mode unavailable locally; lexical fallback active)",
             file=sys.stderr,
             flush=True,
         )

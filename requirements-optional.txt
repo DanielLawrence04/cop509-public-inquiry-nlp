@@ -1,0 +1,9 @@
+# Optional COP509 showcase dependencies
+#
+# Install this for full semantic/hybrid search mode in Notebook 1 and the
+# local web app when MiniLM dense retrieval is required. These packages are
+# intentionally kept out of requirements.txt so the standard marking run stays
+# lightweight and reliable.
+
+sentence-transformers>=2.7,<6
+huggingface-hub>=0.20

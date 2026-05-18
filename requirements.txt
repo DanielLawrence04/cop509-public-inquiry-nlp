@@ -19,5 +19,4 @@ notebook>=7.1
 nbconvert>=7.16
 
 # Optional semantic/hybrid search extension:
-# install manually if you want to enable MiniLM embeddings in Notebook 1.
-# sentence-transformers>=2.7
+# install requirements-optional.txt for full MiniLM semantic/hybrid showcase mode.

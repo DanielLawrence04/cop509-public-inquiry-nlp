@@ -16,7 +16,7 @@ from typing import Callable
 
 import ipywidgets as widgets
 import pandas as pd
-from IPython.display import clear_output, display
+from IPython.display import display
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +338,7 @@ def show(
 
     def _render_detail(rec_id: int | None) -> None:
         with detail_out:
-            clear_output(wait=True)
+            detail_out.clear_output(wait=True)
             if rec_id is None:
                 return
             rec = next((r for r in recs if r.get("rec_id") == rec_id), None)
@@ -387,7 +387,7 @@ def show(
 
         # Table
         with table_out:
-            clear_output(wait=True)
+            table_out.clear_output(wait=True)
             if page_recs:
                 display(widgets.HTML(_table_html(page_recs, start + 1)))
             else:

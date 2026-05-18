@@ -24,7 +24,7 @@ from typing import Optional
 
 import ipywidgets as widgets
 import numpy as np
-from IPython.display import clear_output, display
+from IPython.display import display
 
 from ..chunking import Chunk, detect_chunk_heading
 from ..search import (
@@ -248,6 +248,7 @@ def show_advanced(
     chunks: list[Chunk],
     embeddings: Optional[np.ndarray] = None,
     top_k: int = 5,
+    default_query: str = "",
 ) -> None:
     """
     Render the advanced search widget.
@@ -262,6 +263,8 @@ def show_advanced(
         mode buttons are shown but disabled with a warning.
     top_k : int
         Default result count.
+    default_query : str
+        Optional query used to populate the first rendered result view.
     """
     sources = sorted({c["source"] for c in chunks})
     has_embeddings = embeddings is not None and len(embeddings) == len(chunks)
@@ -269,6 +272,7 @@ def show_advanced(
 
     # --- Widgets ---
     query_box = widgets.Text(
+        value=default_query,
         placeholder="Enter a search query…",
         layout=widgets.Layout(width="52%"),
     )
@@ -326,7 +330,7 @@ def show_advanced(
         query = query_box.value.strip()
         if not query:
             with output:
-                clear_output()
+                output.clear_output(wait=True)
             return
 
         selected = doc_filter.value
@@ -339,7 +343,7 @@ def show_advanced(
             results = _run_search(query, corpus, mode, topk_slider.value)
         except Exception as exc:
             with output:
-                clear_output(wait=True)
+                output.clear_output(wait=True)
                 display(widgets.HTML(
                     f"<p style='color:#842029;font-family:sans-serif;'>"
                     f"Search error ({mode}): {html.escape(str(exc))}</p>"
@@ -347,7 +351,7 @@ def show_advanced(
             return
 
         with output:
-            clear_output(wait=True)
+            output.clear_output(wait=True)
             if not results:
                 display(widgets.HTML(
                     "<p style='color:#6c757d;font-family:sans-serif;'>"
@@ -384,6 +388,7 @@ def show_advanced(
     doc_filter.observe(_on_change, names="value")
     mode_toggle.observe(_on_change, names="value")
 
+    _on_change()
     display(widgets.VBox([
         status,
         widgets.HBox([query_box, topk_slider]),

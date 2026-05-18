@@ -17,8 +17,8 @@ if SEMANTIC_AVAILABLE:
     print("[STARTUP] mode=full | semantic search enabled", file=sys.stderr, flush=True)
 else:
     print(
-        "[STARTUP] mode=lightweight | semantic search disabled | "
-        "lexical (TF-IDF) search active | no sentence-transformers loaded",
+        "[STARTUP] mode=lightweight | reproducible TF-IDF baseline active | "
+        "full semantic/hybrid mode available when optional dependencies are loaded",
         file=sys.stderr,
         flush=True,
     )
