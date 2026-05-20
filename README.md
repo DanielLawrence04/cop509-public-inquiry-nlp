@@ -13,6 +13,18 @@ GitHub repository: <https://github.com/DanielLawrence04/cop509-public-inquiry-nl
 
 Notebook 1 covers Task 1 search. Notebook 2 covers Task 2a recommendation extraction, Task 2b response matching/classification and Task 2c evaluation evidence.
 
+## Open in Google Colab
+
+Notebook 1 - Task 1 Search System:  
+https://colab.research.google.com/github/DanielLawrence04/cop509-public-inquiry-nlp/blob/main/COP509_Notebook1_Search.ipynb
+
+Notebook 2 - Task 2 Extraction, Alignment and Classification:  
+https://colab.research.google.com/github/DanielLawrence04/cop509-public-inquiry-nlp/blob/main/COP509_Notebook2_Extraction_Alignment.ipynb
+
+In Colab, run the setup cells at the top first. These clone the full GitHub repository and install the required packages so the notebooks can access `src/`, `data/`, `outputs/` and the PDF files.
+
+The semantic/hybrid search cells are optional showcase cells. If Colab cannot download the MiniLM model from Hugging Face, the notebook automatically falls back to the reproducible TF-IDF baseline used for marking.
+
 ## Standard Marking Run
 
 The standard marking path uses the lightweight, reproducible dependencies in `requirements.txt`. Notebook 1 defaults to TF-IDF lexical retrieval so it runs without large model downloads. Notebook 2 reads the final validated exports and does not overwrite source data.
